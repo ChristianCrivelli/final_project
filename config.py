@@ -10,6 +10,7 @@ DRIVER      = "ODBC Driver 17 for SQL Server"
 
 
 # ───────────── POSTGRES CONFIG ─────────────
+# Unfortunately here we just blast michaela private info, it is hihgly not professional but lets assume ok
 HOST     = "localhost"
 PORT     = 5432
 USER     = "postgres"
