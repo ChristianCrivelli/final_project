@@ -4,20 +4,17 @@ import time
 from python_api import get_conn
 from config import DATA_FOLDER, DB_TYPE
 
-# ==============================================================
-# CONNECTION
-# ==============================================================
-
+# 1) CONNECTION
+# Again we connect to our server
 conn = get_conn()
 conn.autocommit = True
 cursor = conn.cursor()
 
 print("✅ Connected to database")
 
-# ==============================================================
-# FILE MAP
-# ==============================================================
 
+# 2) FILE MAP
+# Basically mapping all our files
 file_map = {
     "cards_data.csv":        "ingestion.cards_data",
     "mcc_data.csv":          "ingestion.mcc_data",
@@ -25,9 +22,9 @@ file_map = {
     "users_data.csv":        "ingestion.users_data",
 }
 
-# ==============================================================
-# SQL SERVER BULK INSERT
-# ==============================================================
+# FUNCTION  :  SQL SERVER BULK INSERT
+# This function will help us insert per bulk data from our source files.
+# Indeed, transactio  happens to be really really huge and we need to establish a good way to import it.
 
 def load_sqlserver_bulk(filepath, table):
     abs_path = os.path.abspath(filepath).replace("\\", "/")
@@ -49,9 +46,8 @@ def load_sqlserver_bulk(filepath, table):
     return cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
 
-# ==============================================================
-# POSTGRES COPY (FIXED)
-# ==============================================================
+
+# POSTGRES COPY 
 
 def load_postgres_copy(filepath, table):
     import psycopg
@@ -71,9 +67,8 @@ def load_postgres_copy(filepath, table):
     return cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
 
-# ==============================================================
-# FALLBACK (OPTIMIZED)
-# ==============================================================
+
+# FALLBACK for the load chuunk
 
 def load_chunked_fallback(filepath, table, chunksize=200_000):
 
@@ -107,14 +102,14 @@ def load_chunked_fallback(filepath, table, chunksize=200_000):
     return total
 
 
-# ==============================================================
+
 # MAIN LOOP
-# ==============================================================
+# Our main loop, basically, we run the functions we defined beforehand.
 
 print("\n📂 Loading CSV files...\n")
 
-start_total = time.time()
-
+start_total = time.time()  # getting the time to see how it is loading
+# loop to get all the files
 for filename, table in file_map.items():
 
     filepath = os.path.join(DATA_FOLDER, filename)
@@ -147,10 +142,8 @@ for filename, table in file_map.items():
         count = load_chunked_fallback(filepath, table)
         print(f"✅ {table:<40} {count:>10,} rows (fallback)")
 
-
-# ==============================================================
 # VERIFICATION
-# ==============================================================
+# Basically checking the data of our ingestion
 
 print("\n── Row counts ──────────────────────────────────────────")
 
@@ -158,7 +151,8 @@ for table in file_map.values():
     count = cursor.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     print(f"   {table:<42} {count:>12,} rows")
 
-print(f"\n🎉 Done in {time.time() - start_total:.1f}s")
+print(f"\n🎉 Yippie. Done in {time.time() - start_total:.1f}s")
 
+# Closing because you see it is important
 cursor.close()
 conn.close()
