@@ -14,11 +14,14 @@ Merchant Partnerships: Top-performing merchants, industry growth, and error rate
 ## Architecture & Data Flow
 The pipeline follows a multi-layered (Medallion) architecture to ensure data quality and separation of concerns:
 
-## Ingestion Layer (Bronze): Raw CSV exports (Transactions, Users, Cards, and MCC data) are loaded into a staging schema without type enforcement to ensure 100% data capture.
+## Ingestion Layer (Bronze): 
+Raw CSV exports (Transactions, Users, Cards, and MCC data) are loaded into a staging schema without type enforcement to ensure 100% data capture.
 
-## Transformation Layer (Silver): Data is cleaned and standardized. This includes handling currency formatting (e.g., removing '$' and parsing 'k' notation), normalizing categorical fields like card_brand and employment_status, and enforcing data types.
+## Transformation Layer (Silver): 
+Data is cleaned and standardized. This includes handling currency formatting (e.g., removing '$' and parsing 'k' notation), normalizing categorical fields like card_brand and employment_status, and enforcing data types.
 
-## Curated Layer (Gold): A dimensional model (Star Schema) is built to facilitate fast reporting. This layer contains fact tables and business-specific dimensions like dim_users, dim_cards, and dim_merchant.
+## Curated Layer (Gold): 
+A dimensional model (Star Schema) is built to facilitate fast reporting. This layer contains fact tables and business-specific dimensions like dim_users, dim_cards, and dim_merchant.
 
 ## Repository Structure
 pipeline.py: The main orchestrator that runs the entire end-to-end process in the correct sequence.
