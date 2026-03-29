@@ -3,9 +3,8 @@ import numpy as np
 import time
 from python_api import get_conn
 
-# ─────────────────────────────────────────────
-# STEP 1 — CONNECT
-# ─────────────────────────────────────────────
+# Connect
+
 conn_read  = get_conn()
 conn_write = get_conn()
 
@@ -15,9 +14,8 @@ write_cursor.fast_executemany = True
 
 print("Connected to database ✅")
 
-# ─────────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────────
+# Constants
+
 CHUNK_SIZE = 200_000
 
 VALID_US_STATES = {
@@ -28,10 +26,6 @@ VALID_US_STATES = {
     'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'
 }
 
-# ─────────────────────────────────────────────
-# HELPER — converts ANY numpy/pandas type to
-# plain Python so pyodbc never crashes
-# ─────────────────────────────────────────────
 def to_python(val):
     if val is None or val is pd.NA or val is pd.NaT:
         return None
@@ -52,24 +46,19 @@ def to_python(val):
         pass
     return val
 
-# ─────────────────────────────────────────────
-# STEP 2 — GET TOTAL ROW COUNT
-# ─────────────────────────────────────────────
+# Total row count
 total_in_db = read_cursor.execute(
     "SELECT COUNT(*) FROM ingestion.transactions_data"
 ).fetchone()[0]
 print(f"Total rows in ingestion.transactions_data: {total_in_db:,}")
 
-# ─────────────────────────────────────────────
-# STEP 3 — CREATE CLEAN TABLE
-# ─────────────────────────────────────────────
+# Clean table
 write_cursor.execute("""
     IF OBJECT_ID('clean.transactions', 'U') IS NOT NULL
         DROP TABLE clean.transactions
 """)
 
 
-# After analysis we will add the column country since we have transactions from abroad, as well as change the city by county to be more exact
 write_cursor.execute("""
     CREATE TABLE clean.transactions (
         id               INT            NOT NULL,
@@ -91,24 +80,23 @@ write_cursor.execute("""
 conn_write.commit()
 print("clean.transactions created ✅\n")
 
-# ─────────────────────────────────────────────
-# STEP 4 — CLEAN FUNCTION
-# ─────────────────────────────────────────────
+# Clean function
+
 def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
 
-    # --- id ---
+    # Id
     chunk['id'] = pd.to_numeric(chunk['id'], errors='coerce')
     chunk = chunk.dropna(subset=['id'])
     chunk['id'] = chunk['id'].astype(int)
 
-    # --- nullable ints ---
+
     for col in ['client_id', 'card_id', 'merchant_id']:
         chunk[col] = pd.to_numeric(chunk[col], errors='coerce').astype('Int64')
 
-    # --- date → Python date object (not Timestamp) ---
+    # Set date to Python date object
     chunk['date'] = pd.to_datetime(chunk['date'], errors='coerce').dt.date
 
-    # --- amount ---
+    # Amount
     chunk['amount'] = (
         chunk['amount']
         .astype(str)
@@ -117,27 +105,27 @@ def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     )
     chunk['amount'] = pd.to_numeric(chunk['amount'], errors='coerce')
 
-    # --- is_refund: plain Python bool, not numpy.bool_ ---
+    # is_refund
     chunk['is_refund'] = (chunk['amount'] < 0).astype(bool)
 
-    # --- use_chip ---
+    # use_chip
     chunk['use_chip'] = (
     chunk['use_chip']
     .str.strip()
     .str.replace(' Transaction', '', regex=False)
 )
 
-    # --- mcc ---
+    # mcc 
     chunk['mcc'] = pd.to_numeric(chunk['mcc'], errors='coerce').astype('Int64')
 
-    # --- errors: real NULL not the string 'None' ---
+    # Set errors to NULL
     chunk['errors'] = (
         chunk['errors']
         .replace({'': None, 'nan': None, 'None': None})
         .where(chunk['errors'].notna(), None)
     )
 
-    # --- merchant_city ---
+    # Merchant_city 
     chunk['merchant_county'] = (
     chunk['merchant_city']
     .fillna('Unknown')
@@ -147,7 +135,7 @@ def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     .str.title()
     )
 
-    # --- zip ---
+    # zip 
     chunk['zip'] = (
         chunk['zip']
         .fillna('')
@@ -157,7 +145,7 @@ def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
         .replace('', None)
     )
 
-    # --- merchant_state + merchant_country (vectorized) ---
+    # merchant_state + merchant_country 
     raw_state = (
         chunk['merchant_state']
         .fillna('')
@@ -177,9 +165,7 @@ def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
 
     return chunk
 
-# ─────────────────────────────────────────────
-# STEP 5 — COLUMN ORDER + INSERT SQL
-# ─────────────────────────────────────────────
+
 COLS = [
     'id','date','client_id','card_id','amount','is_refund',
     'use_chip','merchant_id','merchant_county',
@@ -194,9 +180,7 @@ INSERT_SQL = """
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 """
 
-# ─────────────────────────────────────────────
-# STEP 6 — CHUNK LOOP
-# ─────────────────────────────────────────────
+
 total_inserted = 0
 total_dropped  = 0
 start          = time.time()
@@ -226,9 +210,7 @@ for chunk in pd.read_sql(
     pct     = (total_inserted / total_in_db * 100) if total_in_db else 0
     print(f"   ➜ {total_inserted:>10,} / {total_in_db:,}  ({pct:.1f}%)  ~{rate:,.0f} rows/s")
 
-# ─────────────────────────────────────────────
-# STEP 7 — VERIFY
-# ─────────────────────────────────────────────
+
 count   = read_cursor.execute("SELECT COUNT(*) FROM clean.transactions").fetchone()[0]
 elapsed = time.time() - start
 
@@ -248,9 +230,7 @@ for col, sql in [
     for r in read_cursor.execute(sql).fetchall():
         print(f"    {str(r[0]):<25} {r[1]:>10,}")
 
-# ─────────────────────────────────────────────
-# CLEANUP
-# ─────────────────────────────────────────────
+
 read_cursor.close()
 write_cursor.close()
 conn_read.close()
