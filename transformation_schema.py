@@ -1,10 +1,5 @@
 from python_api import get_conn
 
-# ==============================================================
-# CLEAN SCHEMA DDL — Run once before any clean_*.py scripts
-# Creates the 'clean' schema in SQL Server
-# ==============================================================
-
 conn = get_conn()
 conn.autocommit = True
 cursor = conn.cursor()
