@@ -1,8 +1,9 @@
+# Importing the packages
 import pyodbc
 import psycopg
 from config import DB_TYPE, SERVER_NAME, DRIVER, HOST, PORT, USER, PASSWORD, DATABASE
  
- 
+# Creating a function that can help connect to the server 
 def get_conn(database=None):
     """Return an open connection using the DB_TYPE set in config.py."""
     db_name = database if database else DATABASE
@@ -14,9 +15,9 @@ def get_conn(database=None):
             f"DATABASE={db_name};"
             "Trusted_Connection=yes;"
         )
- 
+ # same but if it is postgress
     elif DB_TYPE == "postgres":
-        # Postgres uses 'postgres' as the default admin database (not 'master')
+
         return psycopg.connect(
             host=HOST,
             port=PORT,
