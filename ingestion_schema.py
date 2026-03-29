@@ -1,12 +1,15 @@
+# Basically here, we import python api and config we created to get the function that will help us
 from python_api import get_conn
 from config import DATABASE
 
 # ==============================================================
-# INGESTION DDL — Create schema & all staging tables
-# Philosophy: raw ingestion layer — everything stored as NVARCHAR,
-# no type enforcement, no constraints. Cleaning happens in clean.py
+# INGESTION Data Definition Language (DDL) 
 # ==============================================================
+# In this script, we create schemas for all of our ingestion tables
+# we want a raw ingestion layer so everything is stored as NVARCHAR, everything loaded row with no type enforcement, no constraints. Cleaning happens in clean.py
 
+
+# Connection to the database: 
 conn = get_conn()
 conn.autocommit = True
 cursor = conn.cursor()
@@ -129,8 +132,10 @@ cursor.execute("""
 print("✅ ingestion.users_data created")
 
 # ==============================================================
-# DONE
+# Finalisation
 # ==============================================================
+# important to close to like prevent data leakage
 cursor.close()
 conn.close()
+# And finally a small message that will help us debug later and see at what stage we are.
 print("\n🎉 Ingestion schema fully created")
