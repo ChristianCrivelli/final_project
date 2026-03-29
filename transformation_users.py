@@ -3,9 +3,8 @@ import numpy as np
 import re
 from python_api import get_conn
 
-# ─────────────────────────────────────────────
-# STEP 1 — CONNECT
-# ─────────────────────────────────────────────
+# Connect
+
 conn = get_conn()
 conn.autocommit = False
 cursor = conn.cursor()
@@ -13,23 +12,22 @@ cursor.fast_executemany = True
 
 print("Connected to database ✅")
 
-# ─────────────────────────────────────────────
-# STEP 2 — LOAD FROM INGESTION LAYER
-# ─────────────────────────────────────────────
+# Load from ingestion
+
 df = pd.read_sql("SELECT * FROM ingestion.users_data", conn)
 print(f"Loaded {len(df)} rows from ingestion.users_data")
 print(f"Duplicates before cleaning: {df.duplicated().sum()}")
 
-# ─────────────────────────────────────────────
-# STEP 3 — TRANSFORMATION LOGIC
-# ─────────────────────────────────────────────
+#________________
+# Transformation
+#________________
 
-# --- id: cast to int, drop if missing ---
+# Set id to INT
 df['id'] = pd.to_numeric(df['id'], errors='coerce')
 df = df.dropna(subset=['id'])
 df['id'] = df['id'].astype(int)
 
-# --- numeric columns ---
+
 for col in ['current_age', 'retirement_age', 'birth_year',
             'birth_month', 'credit_score', 'num_credit_cards']:
     df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
@@ -37,7 +35,7 @@ for col in ['current_age', 'retirement_age', 'birth_year',
 for col in ['latitude', 'longitude']:
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# --- currency columns: $, commas, k-notation (Michaela's logic) ---
+# Currency columns: Remove $ and commas, multiply the k-notation by 1000
 def parse_currency(val):
     if pd.isna(val):
         return None
@@ -52,17 +50,17 @@ def parse_currency(val):
 for col in ['per_capita_income', 'yearly_income', 'total_debt']:
     df[col] = df[col].apply(parse_currency)
 
-# --- address: strip whitespace (Michaela's T1) ---
+# Trim address
 df['address'] = df['address'].str.strip()
 
-# --- gender: title case ---
+# Gender: title case 
 df['gender'] = df['gender'].str.strip().str.title()
 
 
 
 
 
-#  employment_status: lowercase → normalize map
+#  Normalize employment_status
 df["employment_status"] = df["employment_status"].astype(str).str.strip()
 
 # remove pure numbers
@@ -103,17 +101,16 @@ df["employment_status"] = df["employment_status"].apply(
 
 
 
-# --- education_level: lowercase → normalize map
+# Normalize education_level
 def extract_education(val):
     if pd.isna(val):
         return None
 
     v = str(val).strip().lower()
 
-    # remove leading junk like "employed,", "student,", "1,"
+   
     v = re.sub(r"^(employed|student|retired|unemployed|self[- ]employed|\d+)\s*,\s*", "", v)
 
-    # collapse multiple commas
     parts = [p.strip() for p in v.split(",")]
 
     # take last meaningful part
@@ -162,21 +159,21 @@ valid = {"Bachelor", "Master", "High School", "Associate", "Doctorate"}
 
 df.loc[~df["education_level"].isin(valid), "education_level"] = "Unknown"
 
-# --- deduplicate ---
+# Deduplicate 
 before = len(df)
 df = df.drop_duplicates().reset_index(drop=True)
 print(f"Removed {before - len(df)} duplicates")
 print(f"Cleaned rows: {len(df)}")
 
-# --- diagnostic: max string length per column ---
+
 print("\n── Max string lengths ───────────────────")
 for col in df.select_dtypes(include='object').columns:
     mx = df[col].dropna().astype(str).str.len().max()
     print(f"  {col:<25} {mx}")
 
-# ─────────────────────────────────────────────
-# STEP 4 — CREATE CLEAN TABLE
-# ─────────────────────────────────────────────
+# ────────────
+# Clean table
+# ────────────
 cursor.execute("""
     IF OBJECT_ID('clean.users', 'U') IS NOT NULL
         DROP TABLE clean.users
@@ -203,9 +200,7 @@ cursor.execute("""
 """)
 print("\nclean.users created ✅")
 
-# ─────────────────────────────────────────────
-# STEP 5 — INSERT CLEAN DATA
-# ─────────────────────────────────────────────
+
 def to_python(val):
     """Convert numpy/pandas types to plain Python for pyodbc."""
     if val is None or val is pd.NA:
@@ -241,9 +236,7 @@ cursor.executemany("""
 conn.commit()
 print(f"Inserted {len(data)} rows into clean.users ✅")
 
-# ─────────────────────────────────────────────
-# STEP 6 — VERIFY
-# ─────────────────────────────────────────────
+
 count = cursor.execute("SELECT COUNT(*) FROM clean.users").fetchone()[0]
 print(f"Final row count in clean.users: {count}")
 
