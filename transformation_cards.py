@@ -2,34 +2,32 @@ import pandas as pd
 import numpy as np
 from python_api import get_conn
 
-# ─────────────────────────────────────────────
-# STEP 1 — CONNECT
-# ─────────────────────────────────────────────
+# Connect 
+
 conn = get_conn()
 conn.autocommit = False
 cursor = conn.cursor()
 cursor.fast_executemany = True
 print("Connected to database ✅")
 
-# ─────────────────────────────────────────────
-# STEP 2 — LOAD FROM INGESTION LAYER
-# ─────────────────────────────────────────────
+# Load from ingestion 
+
 df = pd.read_sql("SELECT * FROM ingestion.cards_data", conn)
 print(f"Loaded {len(df)} rows from ingestion.cards_data")
 print(f"Duplicates before cleaning: {df.duplicated().sum()}")
 
-# ─────────────────────────────────────────────
-# STEP 3 — TRANSFORMATION LOGIC
-# ─────────────────────────────────────────────
+#________________
+# Transformation
+#________________
 
-# --- id, client_id: cast to int ---
+# Set id and client_id to INT
 for col in ['id', 'client_id']:
     df[col] = pd.to_numeric(df[col], errors='coerce')
 df = df.dropna(subset=['id', 'client_id'])
 df['id'] = df['id'].astype(int)
 df['client_id'] = df['client_id'].astype(int)
 
-# --- card_number: strip floating .0 (pandas reads as float) ---
+
 df['card_number'] = (
     df['card_number']
     .astype(str)
@@ -37,21 +35,21 @@ df['card_number'] = (
     .str.strip()
 )
 
-# --- card_brand: normalize to Visa / Mastercard / Amex / Discover / Unknown ---
+# Normalize card_brand to Visa, Mastercard, Amex, Discover, or Unknown
 def normalize_brand(val):
     if pd.isna(val):
         return 'Unknown'
     v = str(val).strip().lower().replace(' ', '').replace('-', '')
-    # Visa variants: visa, v, vis, vvisa, vissa, v!sa (typos)
+    # Visa 
     if v in ('visa', 'v', 'vis', 'vvisa', 'vissa', 'v!sa', 'visacard'):
         return 'Visa'
-    # Mastercard variants
+    # Mastercard 
     if v in ('mastercard', 'master card', 'mastercard', 'mc'):
         return 'Mastercard'
-    # Amex variants
+    # Amex 
     if v in ('amex', 'americanexpress', 'amx', 'amex', 'ame x', 'amex'):
         return 'Amex'
-    # Discover variants
+    # Discover
     if v in ('discover', 'dis cover', 'disc'):
         return 'Discover'
     if v == 'unknown':
@@ -60,7 +58,7 @@ def normalize_brand(val):
 
 df['card_brand'] = df['card_brand'].apply(normalize_brand)
 
-# --- card_type: normalize to Credit / Debit / Prepaid Debit / Unknown ---
+# Normalize card_type to Credit, Debit, Prepaid Debit, or Unknown 
 def normalize_card_type(val):
     if pd.isna(val):
         return 'Unknown'
@@ -69,7 +67,7 @@ def normalize_card_type(val):
     if v in ('credit', 'cc', 'cr', 'cred', 'cedit', 'crdeit', 'credt',
              'creditcard', 'cardcredit', 'credit card'):
         return 'Credit'
-    # Prepaid Debit (check before plain debit — more specific)
+    # Prepaid Debit 
     if any(x in v for x in ('prepaid', 'prepayed', 'prepiad', 'ppd', 'pp',
                               'dbpp', 'dpp', 'prepaiddebit')):
         return 'Prepaid Debit'
@@ -83,21 +81,21 @@ def normalize_card_type(val):
 
 df['card_type'] = df['card_type'].apply(normalize_card_type)
 
-# --- credit_limit: handle $, .00, k notation, text junk, negatives ---
+# Transform credit_limit: 
 def parse_credit_limit(val):
     if pd.isna(val):
         return None
     v = str(val).strip().lower().replace(',', '').replace('$', '')
-    # Text junk → null
+    # Set invalid values to null
     if v in ('error_value', 'limit_unknown', 'ten thousand', '', 'nan'):
         return None
-    # k notation: 5.5k → 5500
+    # Get rid of the k-notation by multiplying by 1000
     if v.endswith('k'):
         try:
             return round(float(v[:-1]) * 1000, 2)
         except:
             return None
-    # Negatives → null (credit limit can't be negative)
+    # Set negatives to null
     try:
         result = float(v)
         return result if result >= 0 else None
@@ -106,7 +104,7 @@ def parse_credit_limit(val):
 
 df['credit_limit'] = df['credit_limit'].apply(parse_credit_limit)
 
-# --- expires: normalize Mon-YY → MM/YYYY ---
+# Normalize expires date
 def parse_date_field(val):
     if pd.isna(val) or str(val).strip() == '':
         return None
@@ -117,7 +115,7 @@ def parse_date_field(val):
 
 df['expires'] = df['expires'].apply(parse_date_field)
 
-# acct_open_date has two formats: 'Sep-02' and 'Feb 01 1996'
+# Normalize acct_open_date
 def parse_acct_date(val):
     if pd.isna(val) or str(val).strip() in ('', 'not available'):
         return None
@@ -131,24 +129,24 @@ def parse_acct_date(val):
 
 df['acct_open_date'] = df['acct_open_date'].apply(parse_acct_date)
 
-# --- year_pin_last_changed: cast to int ---
+# Set year_pin_last_changed to INT
 df['year_pin_last_changed'] = pd.to_numeric(
     df['year_pin_last_changed'], errors='coerce'
 ).astype('Int64')
 
-# --- num_cards_issued: cast to int ---
+# Set num_cards_issued to INT
 df['num_cards_issued'] = pd.to_numeric(
     df['num_cards_issued'], errors='coerce'
 ).astype('Int64')
 
-# --- has_chip / card_on_dark_web: normalize to Yes / No ---
+# Normalize has_chip and card_on_dark_web to Yes or No 
 for col in ['has_chip', 'card_on_dark_web']:
     df[col] = df[col].str.strip().str.title()
 
-# --- issuer_bank_name: strip spaces ---
+# Trim spaces in issuer_bank_name
 df['issuer_bank_name'] = df['issuer_bank_name'].str.strip().fillna('Unknown')
 
-# --- issuer_bank_state: normalize full names to 2-letter abbreviations ---
+# Normalize issuer_bank_state: convert full names to 2-letter abbreviation codes ---
 state_map = {
     'ILLINOIS': 'IL', 'VIRGINIA': 'VA', 'NORTH CAROLINA': 'NC',
     'MICHIGAN': 'MI', 'NEW YORK': 'NY', 'MINNESOTA': 'MN',
@@ -162,7 +160,7 @@ df['issuer_bank_state'] = (
     .fillna('Unknown')
 )
 
-# --- issuer_bank_type: normalize to National / Online / Regional ---
+# Normalize issuer_bank_type to National, Online, or Regional
 def normalize_bank_type(val):
     if pd.isna(val):
         return 'Unknown'
@@ -177,7 +175,7 @@ def normalize_bank_type(val):
 
 df['issuer_bank_type'] = df['issuer_bank_type'].apply(normalize_bank_type)
 
-# --- issuer_risk_rating: normalize to Low / Medium / High / Unknown ---
+# Normalize issuer_risk_rating to Low, Medium, High, or Unknown
 def normalize_risk(val):
     if pd.isna(val):
         return 'Unknown'
@@ -192,7 +190,7 @@ def normalize_risk(val):
 
 df['issuer_risk_rating'] = df['issuer_risk_rating'].apply(normalize_risk)
 
-# --- deduplicate: drop full row dupes first, then keep first on id ---
+# Drop full row dupes first, then keep first on id 
 before = len(df)
 df = df.drop_duplicates()
 df = df.drop_duplicates(subset='id', keep='first')
@@ -200,15 +198,15 @@ df = df.reset_index(drop=True)
 print(f"Removed {before - len(df)} duplicates")
 print(f"Cleaned rows: {len(df)}")
 
-# --- diagnostic: max string length per column ---
 print("\n── Max string lengths ───────────────────")
 for col in df.select_dtypes(include='object').columns:
     mx = df[col].dropna().astype(str).str.len().max()
     print(f"  {col:<25} {mx}")
 
-# ─────────────────────────────────────────────
-# STEP 4 — CREATE CLEAN TABLE
-# ─────────────────────────────────────────────
+#_____________
+# Clean table
+#_____________
+
 cursor.execute("""
     IF OBJECT_ID('clean.cards', 'U') IS NOT NULL
         DROP TABLE clean.cards
@@ -236,16 +234,12 @@ cursor.execute("""
 """)
 print("\nclean.cards created ✅")
 
-# ─────────────────────────────────────────────
-# STEP 5 — INSERT CLEAN DATA
-# ─────────────────────────────────────────────
 
 cols = ['id','client_id','card_brand','card_type','card_number',
         'expires','cvv','has_chip','num_cards_issued','credit_limit',
         'acct_open_date','year_pin_last_changed','card_on_dark_web',
         'issuer_bank_name','issuer_bank_state','issuer_bank_type','issuer_risk_rating']
 
-# Convert all numpy/pandas types to plain Python so pyodbc can handle them
 def to_python(val):
     if val is None or val is pd.NA:
         return None
@@ -274,9 +268,7 @@ cursor.executemany("""
 conn.commit()
 print(f"Inserted {len(data)} rows into clean.cards ✅")
 
-# ─────────────────────────────────────────────
-# STEP 6 — VERIFY
-# ─────────────────────────────────────────────
+
 count = cursor.execute("SELECT COUNT(*) FROM clean.cards").fetchone()[0]
 print(f"Final row count in clean.cards: {count}")
 
