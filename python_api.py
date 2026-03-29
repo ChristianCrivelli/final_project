@@ -1,8 +1,9 @@
-import pyodbc
-import psycopg
+# Import the packages
+import pyodbc # SQL from microsoft
+import psycopg # Postgress
 from config import DB_TYPE, SERVER_NAME, DRIVER, HOST, PORT, USER, PASSWORD, DATABASE
  
- 
+ # 
 def get_conn(database=None):
     """Return an open connection using the DB_TYPE set in config.py."""
     db_name = database if database else DATABASE
