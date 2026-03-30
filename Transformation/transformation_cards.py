@@ -143,22 +143,82 @@ df['num_cards_issued'] = pd.to_numeric(
 for col in ['has_chip', 'card_on_dark_web']:
     df[col] = df[col].str.strip().str.title()
 
-# Trim spaces in issuer_bank_name
-df['issuer_bank_name'] = df['issuer_bank_name'].str.strip().fillna('Unknown')
+# ISSUER BANK
 
-# Normalize issuer_bank_state: convert full names to 2-letter abbreviation codes ---
-state_map = {
-    'ILLINOIS': 'IL', 'VIRGINIA': 'VA', 'NORTH CAROLINA': 'NC',
-    'MICHIGAN': 'MI', 'NEW YORK': 'NY', 'MINNESOTA': 'MN',
-    'CALIFORNIA': 'CA', 'PENNSYLVANIA': 'PA'
-}
-df['issuer_bank_state'] = (
-    df['issuer_bank_state']
+# normalisation
+Normalize both columns ---
+df['issuer_bank_name'] = (
+    df['issuer_bank_name']
+    .astype(str)
     .str.strip()
     .str.upper()
-    .replace(state_map)
-    .fillna('Unknown')
 )
+
+df['issuer_bank_state'] = (
+    df['issuer_bank_state']
+    .astype(str)
+    .str.strip()
+    .str.upper()
+)
+
+# Turn garbage into NULL
+df.loc[df['issuer_bank_name'].isin(['NO', 'NONE', 'NAN', '']), 'issuer_bank_name'] = None
+df.loc[df['issuer_bank_state'].isin(['NO', 'NONE', 'NAN', '']), 'issuer_bank_state'] = None
+
+
+#  Fix swapped values
+bank_keywords = ['BANK', 'BK', 'CHASE', 'CITI', 'CAPITAL', 'DISCOVER', 'TRUIST', 'ALLY', 'PNC']
+
+mask = df['issuer_bank_state'].str.contains('|'.join(bank_keywords), na=False)
+
+df.loc[mask, 'issuer_bank_name'] = df.loc[mask, 'issuer_bank_state']
+df.loc[mask, 'issuer_bank_state'] = None
+
+
+# --- Normalize bank names ---
+bank_map = {
+    'PNC BK': 'PNC BANK',
+    'PNC': 'PNC BANK',
+
+    'U.S. BK': 'U.S. BANK',
+    'US BK': 'U.S. BANK',
+
+    'DISCOVER BK': 'DISCOVER BANK',
+    'DISCOVER': 'DISCOVER BANK',
+
+    'CHASE BK': 'CHASE BANK',
+    'CHASE': 'CHASE BANK',
+
+    'BK OF AMERICA': 'BANK OF AMERICA',
+
+    'JP MORGAN CHASE': 'JPMORGAN CHASE',
+    'JP MORGAN': 'JPMORGAN CHASE',
+
+    'ALLY BK': 'ALLY BANK',
+    'ALLY': 'ALLY BANK',
+
+    'CITI': 'CITIBANK'
+}
+
+df['issuer_bank_name'] = df['issuer_bank_name'].replace(bank_map)
+
+
+# Compute state from bank 
+bank_to_state = {
+    'PNC BANK': 'PA',
+    'JPMORGAN CHASE': 'NY',
+    'CHASE BANK' : 'NY',
+    'CITIBANK': 'NY',
+    'BANK OF AMERICA': 'NC',
+    'WELLS FARGO': 'CA',
+    'U.S. BANK': 'MN',
+    'CAPITAL ONE': 'VA',
+    'DISCOVER BANK': 'IL',
+    'ALLY BANK': 'MI',
+    'TRUIST': 'NC'
+}
+
+df['issuer_bank_state'] = df['issuer_bank_name'].map(bank_to_state)
 
 # Normalize issuer_bank_type to National, Online, or Regional
 def normalize_bank_type(val):
