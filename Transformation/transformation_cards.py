@@ -146,7 +146,7 @@ for col in ['has_chip', 'card_on_dark_web']:
 # ISSUER BANK
 
 # normalisation
-Normalize both columns ---
+# Normalize both columns
 df['issuer_bank_name'] = (
     df['issuer_bank_name']
     .astype(str)
