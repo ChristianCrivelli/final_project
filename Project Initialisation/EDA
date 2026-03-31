@@ -1,1 +1,25 @@
+SELECT education_level, COUNT(*) AS count
+FROM ingestion.users_data
+GROUP BY education_level
+ORDER BY count DESC
 
+
+SELECT employment_status, COUNT(*) AS count
+FROM ingestion.users_data
+GROUP BY employment_status
+ORDER BY count DESC
+
+
+SELECT *
+FROM ingestion.users_data
+WHERE per_capita_income LIKE '%k%'
+
+
+SELECT *
+FROM ingestion.users_data
+WHERE total_debt LIKE '%$%'
+
+
+SELECT *
+FROM ingestion.users_data
+WHERE yearly_income LIKE '%,%'
